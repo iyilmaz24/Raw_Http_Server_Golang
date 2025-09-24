@@ -29,9 +29,10 @@ func main() {
 
 		linesChannel := getLinesChannel(conn)
 		for currentLine := range linesChannel {
-			if len(currentLine) > 0 {
-				fmt.Printf("read: %s\n", currentLine)
+			if currentLine == "\r" { // handle CRLF line endings in requests
+				continue
 			}
+			fmt.Printf("read: %s\n", currentLine)
 		}
 		fmt.Println("Connection to", conn.RemoteAddr(), "closed")
 	}
@@ -54,11 +55,16 @@ func getLinesChannel(connection io.ReadCloser) <-chan string {
 			}
 
 			parts = strings.Split(string(data[:n]), "\n");
-			if len(parts) > 1 {
+			if len(parts) > 1 { // at least one newline was found
 				linesChannel <- currString + parts[0];
 				currString = parts[1];
-			} else {
-				currString += parts[0];
+			} else { // no newline found, accumulate
+				currString += string(data[:n]);
+				if currString[len(currString)-1] == '}' { // crude way to detect end of body
+					linesChannel <- currString;
+					currString = "";
+					break;
+				}
 			}
 		}
 
